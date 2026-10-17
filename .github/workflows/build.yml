@@ -1,27 +1,46 @@
 name: Build mod jar
-
+ 
 on:
   push:
   workflow_dispatch:
-
+ 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+ 
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
-      - name: Build
+ 
+      - name: Find the project
         run: |
-          if [ -f create_odyssey_source.zip ]; then unzip -q create_odyssey_source.zip && cd create_odyssey; fi
+          echo "Repository content:"
+          ls -la
+          ZIP=$(find . -maxdepth 4 -iname "*.zip" | head -n 1)
+          if [ -n "$ZIP" ]; then
+            echo "Unzipping $ZIP"
+            mkdir -p /tmp/proj
+            unzip -q "$ZIP" -d /tmp/proj
+          fi
+          GR=$(find . /tmp/proj -name gradlew | head -n 1)
+          if [ -z "$GR" ]; then
+            echo "ERROR: project not found. Upload create_odyssey_source.zip at the root of the repository."
+            exit 1
+          fi
+          echo "Project folder: $(dirname "$GR")"
+          echo "PROJECT_DIR=$(dirname "$GR")" >> "$GITHUB_ENV"
+ 
+      - name: Build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
           chmod +x gradlew
           ./gradlew build --no-daemon
-          mkdir -p "$GITHUB_WORKSPACE/out"
-          cp build/libs/*.jar "$GITHUB_WORKSPACE/out/"
+ 
       - uses: actions/upload-artifact@v4
         with:
           name: create_odyssey-jar
-          path: out/*.jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
           if-no-files-found: error
